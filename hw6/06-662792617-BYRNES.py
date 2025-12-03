@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.decomposition import PCA
 
 def load_dataset():
     """Load and normalized the iris dataset."""
@@ -94,12 +96,12 @@ def do_competitive_learning(iris_normalized, X, eta, n_epochs):
     
     # Assign clusters
     cluster_indices = nn.cluster(X)
-    iris_normalized['cluster_index_competitive'] = cluster_indices
+    iris_normalized[f'cluster_index_competitive_{eta}_{n_epochs}'] = cluster_indices
     
     # Evaluate clustering
-    iris_normalized = cluster_map(iris_normalized, 'variety', 'cluster_index_competitive', 'variety_pred_competitive')
-    confusion_matrix_competitive = compute_confusion_matrix(iris_normalized, 'variety', 'variety_pred_competitive')
-    accuracy_competitive = compute_accuracy(iris_normalized, 'variety', 'variety_pred_competitive')
+    iris_normalized = cluster_map(iris_normalized, 'variety', f'cluster_index_competitive_{eta}_{n_epochs}', f'variety_pred_competitive_{eta}_{n_epochs}')
+    confusion_matrix_competitive = compute_confusion_matrix(iris_normalized, 'variety', f'variety_pred_competitive_{eta}_{n_epochs}')
+    accuracy_competitive = compute_accuracy(iris_normalized, 'variety', f'variety_pred_competitive_{eta}_{n_epochs}')
     
     print("Confusion Matrix:")
     print(confusion_matrix_competitive)
@@ -113,19 +115,20 @@ def do_kmeans(iris_normalized, X, n_iters=100):
     print(f"K-Means Clustering: n_iters={n_iters}")
     
     centroids, cluster_indices_kmeans = kmeans(k=3, data=X, n_iters=n_iters)
-    iris_normalized['cluster_index_kmeans'] = cluster_indices_kmeans
+    iris_normalized[f'cluster_index_kmeans_{n_iters}'] = cluster_indices_kmeans
     
     # Evaluate clustering
-    iris_normalized = cluster_map(iris_normalized, 'variety', 'cluster_index_kmeans', 'variety_pred_kmeans')
-    confusion_matrix_kmeans = compute_confusion_matrix(iris_normalized, 'variety', 'variety_pred_kmeans')
-    accuracy_kmeans = compute_accuracy(iris_normalized, 'variety', 'variety_pred_kmeans')
-    
+    iris_normalized = cluster_map(iris_normalized, 'variety', f'cluster_index_kmeans_{n_iters}', f'variety_pred_kmeans_{n_iters}')
+    confusion_matrix_kmeans = compute_confusion_matrix(iris_normalized, 'variety', f'variety_pred_kmeans_{n_iters}')
+    accuracy_kmeans = compute_accuracy(iris_normalized, 'variety', f'variety_pred_kmeans_{n_iters}')
+
     print("Confusion Matrix:")
     print(confusion_matrix_kmeans)
     print("Accuracy:", accuracy_kmeans)
     print("==============================\n")
     
     return accuracy_kmeans
+
     
 
 def competitive_learning_eta_experiment(iris_normalized, X, etas):
@@ -162,14 +165,9 @@ if __name__ == "__main__":
     # Extract features for clustering
     X = iris_normalized.drop('variety', axis=1).values
     
-    # Competitive Learning
-    comp_eta_accuracies = competitive_learning_eta_experiment(iris_normalized, X, etas=[0.001, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0])
-    comp_epoch_accuracies = competitive_learning_epochs_experiment(iris_normalized, X, n_epochs_list=[1, 5, 10, 20, 50], eta=0.01)
-    
-    # K-means
-    kmeans_iters_accuracies = kmeans_iters_experiment(iris_normalized, X, n_iters_list=[1, 5, 10, 20, 50, 100])
-    
-    # Plot eta vs accuracy for Competitive Learning
+    # Experiment 1 -- Competitive learning, varying eta
+    comp_eta_accuracies = competitive_learning_eta_experiment(iris_normalized, X, etas=[0.0001, 0.001, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0])
+
     plt.figure(figsize=(12, 4))
     etas, comp_accuracies = zip(*comp_eta_accuracies)
     plt.plot(etas, comp_accuracies, marker='o')
@@ -178,14 +176,57 @@ if __name__ == "__main__":
     plt.ylabel('Accuracy')
     plt.title('Competitive Learning: Eta vs Accuracy')
     
-    # Plot epochs vs accuracy and iters vs accuracy for K-means
+    # Experiment 2 -- Competitive learning vs K-Means, varying epochs/iterations
+    comp_epoch_accuracies_1 = competitive_learning_epochs_experiment(iris_normalized, X, n_epochs_list=[1, 5, 10, 20, 50], eta=0.01)
+    comp_epoch_accuracies_2 = competitive_learning_epochs_experiment(iris_normalized, X, n_epochs_list=[1, 5, 10, 20, 50], eta=0.001)
+    comp_epoch_accuracies_3 = competitive_learning_epochs_experiment(iris_normalized, X, n_epochs_list=[1, 5, 10, 20, 50], eta=0.0001) 
+
+    kmeans_iters_accuracies = kmeans_iters_experiment(iris_normalized, X, n_iters_list=[1, 5, 10, 20, 50])
+
     plt.figure(figsize=(12, 4))
-    n_epochs, comp_epoch_accuracies_vals = zip(*comp_epoch_accuracies)
-    plt.plot(n_epochs, comp_epoch_accuracies_vals, marker='o', label='Competitive Learning')
+
+    # Plot competitive learning results for different etas
+    n_epochs, comp_epoch_accuracies_vals = zip(*comp_epoch_accuracies_1)
+    plt.plot(n_epochs, comp_epoch_accuracies_vals, marker='o', label='Competitive Learning with eta=0.01')
+    n_epochs, comp_epoch_accuracies_vals = zip(*comp_epoch_accuracies_2)
+    plt.plot(n_epochs, comp_epoch_accuracies_vals, marker='o', label='Competitive Learning with eta=0.001')
+    n_epochs, comp_epoch_accuracies_vals = zip(*comp_epoch_accuracies_3)
+    plt.plot(n_epochs, comp_epoch_accuracies_vals, marker='o', label='Competitive Learning with eta=0.0001')
+
+    # Plot K-Means results for different etas, as dotted line
     n_iters, kmeans_accuracies_vals = zip(*kmeans_iters_accuracies)
-    plt.plot(n_iters, kmeans_accuracies_vals, marker='o', label='K-Means')
+    plt.plot(n_iters, kmeans_accuracies_vals, marker='o', label='K-Means', linestyle='--')
+
     plt.xlabel('Number of Epochs/Iterations')
     plt.ylabel('Accuracy')
     plt.title('Number of Epochs/Iterations vs Accuracy')
     plt.legend()
     plt.show()
+    
+    # Do PCA and plot clusters
+    # PCA
+X_pca = PCA(n_components=2).fit_transform(X)
+iris_normalized['PCA1'] = X_pca[:, 0]
+iris_normalized['PCA2'] = X_pca[:, 1]
+
+
+# Plot clusters for each solution
+solution_labels = [
+    ("True Labels", "variety"),
+    ("Competitive Learning\neta=0.01, epochs=10", "variety_pred_competitive_0.01_10"),
+    ("Competitive Learning\neta=0.001, epochs=50", "variety_pred_competitive_0.001_50"),
+    ("K-Means\niters=5", "variety_pred_kmeans_5")
+]
+
+name_order = ["Setosa", "Versicolor", "Virginica"]
+
+fig, axes = plt.subplots(1, 4, figsize=(24, 6))
+for i, label in enumerate(solution_labels):
+    ax = axes[i]
+    sns.scatterplot(data=iris_normalized, x='PCA1', y='PCA2',
+                    hue=label[1], hue_order=name_order, palette='Set1', s=100, ax=ax)
+    ax.set_title(f'{label[0]}')
+    ax.legend(title="Variety")
+
+plt.tight_layout()
+plt.show()
